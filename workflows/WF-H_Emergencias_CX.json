@@ -1,0 +1,148 @@
+{
+  "name": "BIA · Diagnóstico Emergencias CX",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bia-emergencias",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "bia-emergencias"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT c.meter_id, mc.meter_name, c.sic\nFROM consumptions c\nLEFT JOIN meters_configurations mc ON mc.meter_id = c.meter_id\nWHERE c.contract_id = {{ $json.contract_id }}\nLIMIT 1",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Query: Info Medidor",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [460, 300],
+      "credentials": {
+        "postgres": {
+          "id": "REEMPLAZAR_CON_ID_DE_CREDENCIAL",
+          "name": "prod-bia-cgm"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  date,\n  hour,\n  phase_a_voltage,\n  phase_b_voltage,\n  phase_c_voltage,\n  phase_a_current,\n  phase_b_current,\n  phase_c_current,\n  total_power_factor\nFROM consumptions\nWHERE contract_id = {{ $('Webhook').item.json.contract_id }}\n  AND date >= NOW() - INTERVAL '3 days'\nORDER BY date DESC, hour DESC\nLIMIT 72",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Query: Últimas 72h",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": {
+        "postgres": {
+          "id": "REEMPLAZAR_CON_ID_DE_CREDENCIAL",
+          "name": "prod-bia-cgm"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  ROUND(AVG(NULLIF(phase_a_voltage,0))::numeric,2)  AS avg_va,\n  ROUND(AVG(NULLIF(phase_b_voltage,0))::numeric,2)  AS avg_vb,\n  ROUND(AVG(NULLIF(phase_c_voltage,0))::numeric,2)  AS avg_vc,\n  ROUND(AVG(NULLIF(phase_a_current,0))::numeric,3)  AS avg_ia,\n  ROUND(AVG(NULLIF(phase_b_current,0))::numeric,3)  AS avg_ib,\n  ROUND(AVG(NULLIF(phase_c_current,0))::numeric,3)  AS avg_ic,\n  ROUND(AVG(NULLIF(total_power_factor,0))::numeric,3) AS avg_fp,\n  ROUND(MAX(phase_a_current)::numeric,3)             AS max_ia,\n  ROUND(MAX(phase_b_current)::numeric,3)             AS max_ib,\n  ROUND(MAX(phase_c_current)::numeric,3)             AS max_ic,\n  COUNT(CASE WHEN phase_b_voltage > 1 THEN 1 END)    AS hrs_vb,\n  COUNT(CASE WHEN phase_c_voltage > 1 THEN 1 END)    AS hrs_vc,\n  COUNT(CASE WHEN phase_a_voltage > 0 THEN 1 END)    AS hrs_total\nFROM consumptions\nWHERE contract_id = {{ $('Webhook').item.json.contract_id }}\n  AND date >= NOW() - INTERVAL '30 days'",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Query: Resumen 30d",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [900, 300],
+      "credentials": {
+        "postgres": {
+          "id": "REEMPLAZAR_CON_ID_DE_CREDENCIAL",
+          "name": "prod-bia-cgm"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const meter   = $('Query: Info Medidor').first().json;\nconst history = $('Query: Últimas 72h').all().map(i => i.json);\nconst summary = $('Query: Resumen 30d').first().json;\n\nreturn [{\n  json: {\n    meter: {\n      meter_id:   meter.meter_id,\n      meter_name: meter.meter_name,\n      sic:        meter.sic\n    },\n    history48h: history,\n    summary30d: summary\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Combinar Resultados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, x-bia-token"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Query: Info Medidor", "type": "main", "index": 0 }]
+      ]
+    },
+    "Query: Info Medidor": {
+      "main": [
+        [{ "node": "Query: Últimas 72h", "type": "main", "index": 0 }]
+      ]
+    },
+    "Query: Últimas 72h": {
+      "main": [
+        [{ "node": "Query: Resumen 30d", "type": "main", "index": 0 }]
+      ]
+    },
+    "Query: Resumen 30d": {
+      "main": [
+        [{ "node": "Combinar Resultados", "type": "main", "index": 0 }]
+      ]
+    },
+    "Combinar Resultados": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "bia-energy"
+  }
+}

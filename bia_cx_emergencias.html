@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diagnóstico CX · Emergencias · Bia Energy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bia-green:  #00C48C;
+      --bia-green2: #00A877;
+      --bia-dark:   #0F1623;
+      --bg:         #F5F6F8;
+      --surface:    #FFFFFF;
+      --border:     #E4E7ED;
+      --text:       #0F1623;
+      --muted:      #6B7280;
+      --ok:         #00C48C;
+      --warn:       #F59E0B;
+      --crit:       #EF4444;
+      --info:       #3B82F6;
+      --font:       'Plus Jakarta Sans', sans-serif;
+      --mono:       'JetBrains Mono', monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Header ── */
+    .header { background: var(--bia-dark); padding: 14px 28px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
+    .header img { height: 26px; filter: brightness(0) invert(1); }
+    .header-div { width: 1px; height: 22px; background: rgba(255,255,255,0.18); }
+    .header-title { color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500; letter-spacing: 0.01em; }
+
+    /* ── Step bar ── */
+    .step-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; display: flex; align-items: center; }
+    .step-item { display: flex; align-items: center; gap: 8px; padding: 13px 16px; font-size: 13px; font-weight: 500; color: var(--muted); }
+    .step-item.active { color: var(--bia-green); }
+    .step-item.done   { color: var(--bia-green); }
+    .step-num { width: 22px; height: 22px; border-radius: 50%; background: var(--border); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+    .step-item.active .step-num, .step-item.done .step-num { background: var(--bia-green); color: #fff; }
+    .step-conn { flex: 1; height: 1px; background: var(--border); min-width: 20px; }
+
+    /* ── Layout ── */
+    .main { max-width: 740px; margin: 0 auto; padding: 32px 20px 64px; }
+    .page-title { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+    .page-sub   { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; margin-bottom: 20px; }
+    .back-link:hover { color: var(--bia-green); }
+
+    /* ── Card ── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+    .card-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .card-sub   { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+
+    /* ── Form ── */
+    .fgroup { margin-bottom: 16px; }
+    .flabel { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 6px; }
+    .finput { width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-family: var(--mono); font-size: 15px; color: var(--text); background: var(--surface); outline: none; transition: border-color 0.15s; }
+    .finput:focus { border-color: var(--bia-green); }
+    .finput.with-unit { padding-right: 42px; }
+    .fhint { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
+    .fwrap { position: relative; }
+    .funit { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--muted); font-family: var(--mono); pointer-events: none; }
+
+    /* ── Buttons ── */
+    .btn-p { background: var(--bia-green); color: #fff; border: none; padding: 11px 22px; border-radius: 8px; font-family: var(--font); font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .btn-p:hover    { background: var(--bia-green2); }
+    .btn-p:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-s { background: transparent; color: var(--text); border: 1.5px solid var(--border); padding: 9px 20px; border-radius: 8px; font-family: var(--font); font-size: 14px; font-weight: 600; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+    .btn-s:hover { border-color: var(--bia-green); color: var(--bia-green); }
+    .btn-dl { background: transparent; color: var(--muted); border: 1.5px solid var(--border); padding: 6px 13px; border-radius: 7px; font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 5px; }
+    .btn-dl:hover { border-color: var(--bia-green); color: var(--bia-green); }
+
+    hr.div { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+    /* ── Loading ── */
+    .loader { display: none; padding: 28px; text-align: center; }
+    .loader.show { display: block; }
+    .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--bia-green); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 14px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-txt { font-size: 13px; color: var(--muted); }
+
+    /* ── Error banner ── */
+    .err-banner { display: none; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 11px 14px; color: #B91C1C; font-size: 13px; margin-bottom: 16px; gap: 8px; align-items: flex-start; }
+    .err-banner.show { display: flex; }
+
+    /* ── Meter card ── */
+    .meter-card { background: #F0FDF9; border: 1.5px solid #A7F3D0; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; }
+    .meter-name { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+    .meter-meta { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+    /* ── Radio cards ── */
+    .radio-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; }
+    .ropt input[type=radio] { display: none; }
+    .ropt label { display: flex; flex-direction: column; gap: 2px; padding: 12px 13px; border: 1.5px solid var(--border); border-radius: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    .ropt label .rl { font-size: 13px; font-weight: 600; color: var(--text); }
+    .ropt label .rs { font-size: 11px; color: var(--muted); }
+    .ropt input:checked + label { border-color: var(--bia-green); background: #F0FDF9; }
+    .ropt input:checked + label .rl { color: var(--bia-green); }
+    .badge-sug { display: inline-block; background: var(--bia-green); color: #fff; font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; letter-spacing: 0.04em; }
+
+    /* ── Vars grid ── */
+    .vars-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 480px) { .vars-grid { grid-template-columns: 1fr; } }
+
+    /* ── Semaphore table ── */
+    .vtable { width: 100%; border-collapse: collapse; }
+    .vtable th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    .vtable td { padding: 9px 10px; font-size: 13px; border-bottom: 1px solid var(--border); }
+    .vtable tr:last-child td { border-bottom: none; }
+    .vtable td.mono { font-family: var(--mono); }
+    .sdot { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; }
+    .sdot::before { content: ''; width: 7px; height: 7px; border-radius: 50%; }
+    .sdot.ok::before   { background: var(--ok); }   .sdot.ok   { color: #065F46; }
+    .sdot.warn::before { background: var(--warn); } .sdot.warn { color: #92400E; }
+    .sdot.crit::before { background: var(--crit); } .sdot.crit { color: #991B1B; }
+
+    /* ── Diagnosis banner ── */
+    .dbanner { border-radius: 12px; padding: 18px 20px; margin-bottom: 20px; display: flex; gap: 14px; align-items: flex-start; }
+    .dbanner.crit { background: #FEF2F2; border: 2px solid #FECACA; }
+    .dbanner.warn { background: #FFFBEB; border: 2px solid #FDE68A; }
+    .dbanner.ok   { background: #F0FDF9; border: 2px solid #A7F3D0; }
+    .dbanner-icon { font-size: 26px; line-height: 1; margin-top: 2px; }
+    .dbanner-title { font-size: 16px; font-weight: 800; margin-bottom: 5px; }
+    .dbanner.crit .dbanner-title { color: #991B1B; }
+    .dbanner.warn .dbanner-title { color: #92400E; }
+    .dbanner.ok   .dbanner-title { color: #065F46; }
+    .dbanner-desc { font-size: 13px; color: #374151; line-height: 1.65; }
+
+    /* ── Actions ── */
+    .alist { list-style: none; }
+    .alist li { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; line-height: 1.6; align-items: flex-start; }
+    .alist li:last-child { border-bottom: none; }
+    .anum { width: 22px; height: 22px; border-radius: 50%; background: var(--bia-dark); color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+
+    /* ── FP indicator ── */
+    .fp-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .fp-val { font-family: var(--mono); font-size: 24px; font-weight: 700; }
+    .fp-hist-ref { font-size: 12px; color: var(--muted); }
+    .fp-label { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+    .fp-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .fp-fill  { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .fp-scale { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+    /* ── Cost banner ── */
+    .cost-banner { border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; font-size: 13px; line-height: 1.55; }
+    .cost-banner .cbt { font-weight: 700; margin-bottom: 4px; font-size: 14px; }
+    .cost-bia  { background: #F0FDF9; border: 1.5px solid #A7F3D0; color: #065F46; }
+    .cost-cli  { background: #EFF6FF; border: 1.5px solid #BFDBFE; color: #1E40AF; }
+
+    /* ── Chart ── */
+    .chart-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .chart-wrap { position: relative; height: 200px; }
+    .chart-empty { font-size: 13px; color: var(--muted); padding: 50px 0; text-align: center; display: none; }
+
+    /* ── Anomaly note ── */
+    .anomaly-note { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 10px 14px; margin-top: 12px; font-size: 12px; color: #92400E; line-height: 1.6; }
+    .anomaly-note strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+    /* ── Client copy ── */
+    .client-copy-card { background: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 12px; padding: 20px 22px; margin-bottom: 16px; }
+    .client-copy-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .client-copy-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .btn-copy { background: var(--bia-dark); color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s; display: flex; align-items: center; gap: 6px; }
+    .btn-copy:hover  { background: #1c2a3a; }
+    .btn-copy.copied { background: var(--bia-green); }
+    .client-copy-text { font-size: 14px; line-height: 1.8; color: #374151; white-space: pre-wrap; font-family: var(--font); }
+
+    /* ── Section title ── */
+    .stitle { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 14px; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <img src="https://www.bia.app/assets-landing/logos/bia-logo.png" alt="Bia Energy">
+  <div class="header-div"></div>
+  <span class="header-title">Diagnóstico CX · Emergencias Eléctricas</span>
+</header>
+
+<!-- ── Step bar ── -->
+<nav class="step-bar" id="stepBar">
+  <div class="step-item" id="sb1"><div class="step-num">1</div>Contrato</div>
+  <div class="step-conn"></div>
+  <div class="step-item" id="sb2"><div class="step-num">2</div>Tipo de medida</div>
+  <div class="step-conn"></div>
+  <div class="step-item" id="sb3"><div class="step-num">3</div>Variables actuales</div>
+  <div class="step-conn"></div>
+  <div class="step-item" id="sb4"><div class="step-num">4</div>Diagnóstico</div>
+</nav>
+
+<div class="main">
+
+  <!-- ══ STEP 1 ══ -->
+  <div id="page1">
+    <h1 class="page-title">Buscar medidor</h1>
+    <p class="page-sub">Ingresa el contrato, número de medidor o código SIC para consultar el historial.</p>
+    <div id="errBanner" class="err-banner"><span>⚠</span><span id="errMsg">Error.</span></div>
+    <div class="card">
+      <div class="fgroup">
+        <label class="flabel" for="contractInput">Identificador del medidor</label>
+        <input type="text" id="contractInput" class="finput"
+          placeholder="ej. 26261 · Frt47415 · 2345678"
+          autocomplete="off" autocorrect="off" spellcheck="false">
+        <div class="fhint">Acepta: ID de contrato · Número de medidor · Código SIC</div>
+      </div>
+      <div id="loader" class="loader">
+        <div class="spinner"></div>
+        <div class="loader-txt" id="loaderTxt">Consultando medidor...</div>
+      </div>
+      <button id="btnBuscar" class="btn-p" onclick="step1Submit()">Consultar historial →</button>
+    </div>
+  </div>
+
+  <!-- ══ STEP 2 ══ -->
+  <div id="page2" class="hidden">
+    <div class="back-link" onclick="goTo(1)">← Cambiar identificador</div>
+    <h1 class="page-title">Tipo de medida</h1>
+    <p class="page-sub">Confirma o corrige el tipo de medida y el segmento del cliente.</p>
+    <div class="meter-card">
+      <div class="meter-name" id="mName">—</div>
+      <div class="meter-meta">SIC: <span id="mSic">—</span> &nbsp;·&nbsp; Medidor: <span id="mId">—</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Tipo de medida</div>
+      <div class="card-sub" id="suggestNote">Sugerencia basada en historial</div>
+      <div class="radio-grid">
+        <div class="ropt"><input type="radio" name="mtype" id="t-mono" value="mono"><label for="t-mono"><span class="rl">Monofásico</span><span class="rs">Solo fase A activa</span></label></div>
+        <div class="ropt"><input type="radio" name="mtype" id="t-bi"   value="bi"  ><label for="t-bi"  ><span class="rl">Bifásico</span>   <span class="rs">Fases A y B activas</span></label></div>
+        <div class="ropt"><input type="radio" name="mtype" id="t-tri"  value="tri" ><label for="t-tri" ><span class="rl">Trifásico</span>  <span class="rs">Tres fases activas</span></label></div>
+        <div class="ropt"><input type="radio" name="mtype" id="t-ind"  value="ind" ><label for="t-ind" ><span class="rl">Indirecta</span>  <span class="rs">Con TPs · media tensión</span></label></div>
+      </div>
+      <hr class="div">
+      <div class="card-title">Segmento del cliente</div>
+      <div class="card-sub">Define quién asume los costos de una eventual visita técnica</div>
+      <div class="radio-grid">
+        <div class="ropt"><input type="radio" name="seg" id="seg-a" value="A"><label for="seg-a"><span class="rl">A — Diamante</span><span class="rs">Bia asume el costo</span></label></div>
+        <div class="ropt"><input type="radio" name="seg" id="seg-b" value="B"><label for="seg-b"><span class="rl">B — Gold</span>    <span class="rs">Cliente paga visita</span></label></div>
+        <div class="ropt"><input type="radio" name="seg" id="seg-c" value="C"><label for="seg-c"><span class="rl">C — Standard</span><span class="rs">Cliente paga visita</span></label></div>
+      </div>
+      <hr class="div">
+      <button class="btn-p" onclick="step2Submit()">Continuar → Ingresar variables</button>
+    </div>
+  </div>
+
+  <!-- ══ STEP 3 ══ -->
+  <div id="page3" class="hidden">
+    <div class="back-link" onclick="goTo(2)">← Volver a tipo de medida</div>
+    <h1 class="page-title">Variables actuales</h1>
+    <p class="page-sub">Ingresa los valores que el coordinador o front reporta desde telemedida en este momento.</p>
+    <div class="card">
+      <div class="card-title">Voltajes</div>
+      <div class="card-sub">Valor actual en cada fase activa</div>
+      <div class="vars-grid" id="vInputs"></div>
+      <hr class="div">
+      <div class="card-title">Corrientes</div>
+      <div class="card-sub">Valor actual en cada fase activa</div>
+      <div class="vars-grid" id="iInputs"></div>
+      <hr class="div">
+      <div class="card-title">Factor de Potencia total</div>
+      <div class="card-sub">Valor entre −1 y 1 (dejar vacío si no está disponible)</div>
+      <div style="max-width:220px;">
+        <div class="fgroup">
+          <div class="fwrap">
+            <input type="number" id="fpIn" class="finput" placeholder="ej. 0.94" step="0.01" min="-1" max="1">
+          </div>
+          <div class="fhint" id="fpHint"></div>
+        </div>
+      </div>
+      <hr class="div">
+      <button class="btn-p" onclick="step3Submit()">Generar diagnóstico →</button>
+    </div>
+  </div>
+
+  <!-- ══ STEP 4 ══ -->
+  <div id="page4" class="hidden">
+    <div class="back-link" onclick="goTo(3)">← Corregir variables</div>
+    <h1 class="page-title">Diagnóstico automático</h1>
+    <p class="page-sub">Análisis basado en los datos del medidor y los valores actuales reportados.</p>
+
+    <div class="meter-card">
+      <div class="meter-name" id="mName4">—</div>
+      <div class="meter-meta">Contrato: <span id="mContract4">—</span> &nbsp;·&nbsp; SIC: <span id="mSic4">—</span> &nbsp;·&nbsp; Medidor: <span id="mId4">—</span></div>
+    </div>
+
+    <div id="diagBanner"></div>
+
+    <div class="card">
+      <div class="stitle">Variables · Actual vs Histórico 30d</div>
+      <table class="vtable">
+        <thead><tr><th>Variable</th><th>Actual</th><th>Prom. 30d</th><th>Estado</th></tr></thead>
+        <tbody id="varRows"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="chart-card-header">
+        <div class="stitle" style="margin-bottom:0">Voltaje · Últimas 72h</div>
+        <button class="btn-dl" onclick="downloadCharts()">⬇ Descargar JPG</button>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="vChart"></canvas>
+        <div class="chart-empty" id="vChartEmpty">Sin datos de las últimas 72h para este medidor.</div>
+      </div>
+      <div id="vAnomalyNote"></div>
+    </div>
+
+    <div class="card">
+      <div class="stitle">Corriente · Últimas 72h</div>
+      <div class="chart-wrap">
+        <canvas id="iChart"></canvas>
+        <div class="chart-empty" id="iChartEmpty">Sin datos de las últimas 72h para este medidor.</div>
+      </div>
+      <div id="iAnomalyNote"></div>
+    </div>
+
+    <div class="card">
+      <div class="stitle">Factor de Potencia</div>
+      <div id="fpIndicator"></div>
+    </div>
+
+    <div id="costBannerEl"></div>
+
+    <div class="card">
+      <div class="stitle">Acciones recomendadas</div>
+      <ul class="alist" id="actionsList"></ul>
+    </div>
+
+    <div id="clientCopyEl"></div>
+
+    <div style="text-align:center;padding:16px 0;">
+      <button class="btn-s" onclick="resetAll()">Nuevo diagnóstico</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Configuración ──
+const WEBHOOK_URL = 'https://aibia.app.n8n.cloud/webhook/bia-emergencias';
+const BIA_TOKEN   = 'Bia.2026cx!';
+
+// ── Estado global ──
+let apiData     = null;
+let meterType   = null;
+let segment     = null;
+let currentVars = {};
+let chartV      = null;
+let chartI      = null;
+
+// ── Navegación ──
+function goTo(n) {
+  [1,2,3,4].forEach(i => {
+    document.getElementById('page'+i).classList.toggle('hidden', i !== n);
+    const b = document.getElementById('sb'+i);
+    b.classList.remove('active','done');
+    if (i === n) b.classList.add('active');
+    if (i < n)  b.classList.add('done');
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Step 1 ──
+document.getElementById('contractInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') step1Submit();
+});
+
+async function step1Submit() {
+  const raw = document.getElementById('contractInput').value.trim();
+  if (!raw) { setErr('Ingresa un ID de contrato, número de medidor o código SIC.'); return; }
+  clearErr();
+  setLoading(true, 'Consultando historial del medidor...');
+  try {
+    const res = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-bia-token': BIA_TOKEN },
+      body: JSON.stringify({ value: raw })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
+    const data = await res.json();
+    if (!data.meter || !data.meter.meter_id) throw new Error('Contrato no encontrado o sin medidor asociado.');
+    apiData = data;
+    setLoading(false);
+    buildStep2();
+    goTo(2);
+  } catch (e) {
+    setLoading(false);
+    setErr(e.message || 'Error de conexión. Verifica el webhook y el token.');
+  }
+}
+
+// ── Step 2 ──
+function buildStep2() {
+  const { meter, summary30d: s } = apiData;
+  document.getElementById('mName').textContent = meter.meter_name || `Medidor ${meter.meter_id}`;
+  document.getElementById('mSic').textContent  = meter.sic  || '—';
+  document.getElementById('mId').textContent   = meter.meter_id || '—';
+  const sug  = suggestType(s);
+  const labs = { mono:'Monofásico', bi:'Bifásico', tri:'Trifásico', ind:'Indirecta' };
+  document.getElementById('suggestNote').innerHTML =
+    `Sugerencia automática: <strong>${labs[sug]}</strong> <span class="badge-sug">SUGERIDO</span>`;
+  document.querySelector(`input[name="mtype"][value="${sug}"]`).checked = true;
+}
+
+function suggestType(s) {
+  if (!s) return 'tri';
+  const tot  = parseFloat(s.hrs_total) || 1;
+  const pctB = (parseFloat(s.hrs_vb) || 0) / tot;
+  const pctC = (parseFloat(s.hrs_vc) || 0) / tot;
+  if (parseFloat(s.avg_va) < 70) return 'ind';
+  if (pctB < 0.05)               return 'mono';
+  if (pctC < 0.05)               return 'bi';
+  return 'tri';
+}
+
+function step2Submit() {
+  const te = document.querySelector('input[name="mtype"]:checked');
+  const se = document.querySelector('input[name="seg"]:checked');
+  if (!te) { alert('Selecciona el tipo de medida.'); return; }
+  if (!se) { alert('Selecciona el segmento del cliente.'); return; }
+  meterType = te.value;
+  segment   = se.value;
+  buildStep3();
+  goTo(3);
+}
+
+// ── Step 3 ──
+function phases() {
+  if (meterType === 'mono') return ['a'];
+  if (meterType === 'bi')   return ['a','b'];
+  return ['a','b','c'];
+}
+
+function buildStep3() {
+  const s = apiData.summary30d;
+  const ph = phases();
+  const vi = document.getElementById('vInputs');
+  const ii = document.getElementById('iInputs');
+  vi.innerHTML = ii.innerHTML = '';
+  const lab = { a:'Fase A', b:'Fase B', c:'Fase C' };
+  ph.forEach(p => {
+    vi.innerHTML += `
+      <div class="fgroup">
+        <label class="flabel" for="v${p}">${lab[p]}</label>
+        <div class="fwrap">
+          <input type="number" id="v${p}" class="finput with-unit" placeholder="ej. 121" step="0.1" min="0">
+          <span class="funit">V</span>
+        </div>
+        <div class="fhint">Prom. 30d: ${s['avg_v'+p] ?? '—'} V</div>
+      </div>`;
+    ii.innerHTML += `
+      <div class="fgroup">
+        <label class="flabel" for="i${p}">${lab[p]}</label>
+        <div class="fwrap">
+          <input type="number" id="i${p}" class="finput with-unit" placeholder="ej. 12.3" step="0.1" min="0">
+          <span class="funit">A</span>
+        </div>
+        <div class="fhint">Prom. 30d: ${s['avg_i'+p] ?? '—'} A · Máx: ${s['max_i'+p] ?? '—'} A</div>
+      </div>`;
+  });
+  document.getElementById('fpHint').textContent = `Prom. 30d: ${s.avg_fp ?? '—'}`;
+}
+
+function step3Submit() {
+  const ph = phases();
+  currentVars = {};
+  for (const p of ph) {
+    const v = parseFloat(document.getElementById('v'+p)?.value);
+    const i = parseFloat(document.getElementById('i'+p)?.value);
+    if (isNaN(v) || isNaN(i)) { alert(`Ingresa voltaje y corriente para Fase ${p.toUpperCase()}.`); return; }
+    currentVars['v'+p] = v;
+    currentVars['i'+p] = i;
+  }
+  const fp = parseFloat(document.getElementById('fpIn').value);
+  if (!isNaN(fp)) currentVars.fp = fp;
+  buildStep4();
+  goTo(4);
+}
+
+// ── Step 4 ──
+function buildStep4() {
+  const s  = apiData.summary30d;
+  const h  = apiData.history48h;
+  const ph = phases();
+  const r  = diagnose(currentVars, s, ph);
+
+  const m = apiData.meter;
+  document.getElementById('mName4').textContent     = m.meter_name || `Medidor ${m.meter_id}`;
+  document.getElementById('mContract4').textContent = m.contract_id || '—';
+  document.getElementById('mSic4').textContent      = m.sic || '—';
+  document.getElementById('mId4').textContent       = m.meter_id || '—';
+
+  renderBanner(r);
+  renderVarsTable(ph, s);
+  renderVoltageChart(h, ph);
+  renderCurrentChart(h, ph);
+  renderFP();
+  renderCost(r);
+  renderActions(r);
+  renderClientCopy(r);
+}
+
+// ── Diagnose ──
+function diagnose(v, s, ph) {
+  for (const p of ph) {
+    const vA = v['v'+p] ?? 0, hA = parseFloat(s['avg_v'+p]) || 0;
+    if (hA > 10 && vA === 0) return { sc:1, sev:'crit', phase:p.toUpperCase(), hist:hA };
+  }
+  for (const p of ph) {
+    const vA = v['v'+p] ?? 0, hA = parseFloat(s['avg_v'+p]) || 0;
+    if (vA > 0 && hA > 10 && vA < hA * 0.8) return { sc:2, sev:'warn', phase:p.toUpperCase(), vAct:vA, hist:hA };
+  }
+  const vOK   = ph.every(p => { const vA = v['v'+p]??0, hA = parseFloat(s['avg_v'+p])||0; return hA<=10||vA>=hA*0.8; });
+  const iZero = ph.every(p => (v['i'+p] ?? 0) === 0);
+  if (vOK && iZero) return { sc:3, sev:'warn' };
+  for (const p of ph) {
+    const iA = v['i'+p] ?? 0, mH = parseFloat(s['max_i'+p]) || 0;
+    if ((mH > 0 && iA > mH * 1.3) || iA > 100) return { sc:4, sev:'warn', phase:p.toUpperCase(), iAct:iA, maxH:mH };
+  }
+  return { sc:5, sev:'ok' };
+}
+
+// ── Banner ──
+const BANNERS = {
+  1: { icon:'⚡',  title:'Fase perdida — CRÍTICO',
+       desc: r => `Se perdió voltaje en Fase ${r.phase} (histórico: ${r.hist} V promedio). El medidor registra lo que ve en su entrada: si falta voltaje, el problema está <strong>antes del medidor</strong> — red del OR, acometida o bornera. Solo si hay humo activo en el medidor considerar falla interna.` },
+  2: { icon:'⚠️', title:'Voltaje bajo — ATENCIÓN',
+       desc: r => `Voltaje en Fase ${r.phase}: <strong>${r.vAct} V</strong> vs histórico ${r.hist} V (${Math.round(r.vAct/r.hist*100)} % del normal). Problema parcial <strong>antes del medidor</strong>: conductor con alta resistencia, falla de red o problema en el transformador del OR.` },
+  3: { icon:'🔌', title:'Sin consumo con voltaje OK — ATENCIÓN',
+       desc: () => `La energía <strong>llega hasta el medidor pero no pasa</strong>. El problema está en la instalación interna del cliente: tablero, breakers o cableado. Iniciar protocolo de restablecimiento inmediato.` },
+  4: { icon:'🌡️', title:'Sobrecarga activa — ATENCIÓN',
+       desc: r => `Corriente en Fase ${r.phase}: <strong>${r.iAct} A</strong> — ${Math.round(r.iAct/Math.max(r.maxH,1)*100)} % del máximo histórico (${r.maxH} A). Riesgo de sobrecalentamiento del medidor.` },
+  5: { icon:'✅', title:'Variables normales — OK',
+       desc: () => `No hay anomalías eléctricas detectadas en el medidor ahora. El problema puede ser puntual (ya resuelto) o estar completamente dentro de la instalación interna del cliente.` }
+};
+
+function renderBanner(r) {
+  const b = BANNERS[r.sc];
+  document.getElementById('diagBanner').innerHTML = `
+    <div class="dbanner ${r.sev}">
+      <div class="dbanner-icon">${b.icon}</div>
+      <div><div class="dbanner-title">${b.title}</div><div class="dbanner-desc">${b.desc(r)}</div></div>
+    </div>`;
+}
+
+// ── Vars table ──
+function renderVarsTable(ph, s) {
+  const lab = { a:'Fase A', b:'Fase B', c:'Fase C' };
+  let html = '';
+  ph.forEach(p => {
+    const vA = currentVars['v'+p] ?? '—', hV = parseFloat(s['avg_v'+p]) || 0, vs = vStatus(vA, hV);
+    const iA = currentVars['i'+p] ?? '—', mI = parseFloat(s['max_i'+p]) || 0, is = iStatus(iA, mI);
+    html += `
+      <tr><td>Voltaje ${lab[p]}</td><td class="mono">${vA} V</td><td class="mono" style="color:var(--muted)">${hV||'—'} V</td><td><span class="sdot ${vs.cls}">${vs.lbl}</span></td></tr>
+      <tr><td>Corriente ${lab[p]}</td><td class="mono">${iA} A</td><td class="mono" style="color:var(--muted)">${s['avg_i'+p]??'—'} A</td><td><span class="sdot ${is.cls}">${is.lbl}</span></td></tr>`;
+  });
+  document.getElementById('varRows').innerHTML = html;
+}
+
+function vStatus(v, avg) {
+  if (avg <= 10)     return { cls:'ok',   lbl:'N/A' };
+  if (v === 0)       return { cls:'crit', lbl:'Fase perdida' };
+  if (v < avg * 0.8) return { cls:'warn', lbl:'Bajo' };
+  return { cls:'ok', lbl:'Normal' };
+}
+function iStatus(i, maxH) {
+  if (i === 0) return { cls:'warn', lbl:'Sin consumo' };
+  if ((maxH > 0 && i > maxH * 1.3) || i > 100) return { cls:'crit', lbl:'Sobrecarga' };
+  return { cls:'ok', lbl:'Normal' };
+}
+
+// ── Anomaly detection ──
+function detectAnomalies(rows, key, avg, threshold) {
+  if (!avg || avg <= 0 || !rows.length) return [];
+  return rows.reduce((acc, r, idx) => {
+    const val = r[key];
+    if (val !== null && val !== undefined && val > 0) {
+      const dev = Math.abs(val - avg) / avg;
+      if (dev > threshold) acc.push({ idx, val, dev: Math.round(dev * 100) });
+    }
+    return acc;
+  }, []);
+}
+
+function buildAnomalyDatasets(rows, ph, fieldFn, avgKey, s, threshold) {
+  const datasets = [];
+  ph.forEach(p => {
+    const field = fieldFn(p);
+    const avg = parseFloat(s[avgKey + p]) || 0;
+    const anoms = detectAnomalies(rows, field, avg, threshold);
+    if (!anoms.length) return;
+    const anomSet = new Set(anoms.map(a => a.idx));
+    const data = rows.map((r, idx) => anomSet.has(idx) ? (r[field] ?? null) : null);
+    datasets.push({
+      label: `Atípico Fase ${p.toUpperCase()}`,
+      data,
+      borderColor: 'transparent',
+      backgroundColor: '#EF444490',
+      pointRadius: data.map(v => v !== null ? 7 : 0),
+      pointHoverRadius: data.map(v => v !== null ? 9 : 0),
+      pointBorderColor: '#EF4444',
+      pointBorderWidth: 2,
+      showLine: false,
+      spanGaps: false,
+      order: 0
+    });
+  });
+  return datasets;
+}
+
+function buildAnomalyNote(elId, rows, ph, fieldFn, avgKey, s, threshold, label) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const notes = [];
+  ph.forEach(p => {
+    const avg = parseFloat(s[avgKey + p]) || 0;
+    const anoms = detectAnomalies(rows, fieldFn(p), avg, threshold);
+    if (anoms.length) {
+      const maxDev = Math.max(...anoms.map(a => a.dev));
+      notes.push(`Fase ${p.toUpperCase()}: ${anoms.length} lectura${anoms.length > 1 ? 's' : ''} con desviación >20% del promedio histórico (máx. ${maxDev}% de diferencia).`);
+    }
+  });
+  el.innerHTML = notes.length
+    ? `<div class="anomaly-note"><strong>⚠ Valores atípicos detectados en ${label}</strong>${notes.map(n=>`<div>· ${n}</div>`).join('')}</div>`
+    : '';
+}
+
+// ── Voltage chart ──
+function renderVoltageChart(history, ph) {
+  if (chartV) { chartV.destroy(); chartV = null; }
+  const canvas  = document.getElementById('vChart');
+  const empty   = document.getElementById('vChartEmpty');
+  const anomEl  = document.getElementById('vAnomalyNote');
+
+  if (!history || !history.length) {
+    canvas.style.display = 'none';
+    empty.style.display  = 'block';
+    anomEl.innerHTML = '';
+    return;
+  }
+  canvas.style.display = '';
+  empty.style.display  = 'none';
+
+  const rows = [...history].reverse();
+  const labels = rows.map(r => `${(r.date||'').split('T')[0]} ${String(r.hour??0).padStart(2,'0')}h`);
+  const s = apiData.summary30d;
+  const pcols = { a:'#00C48C', b:'#3B82F6', c:'#F59E0B' };
+
+  const datasets = ph.map(p => ({
+    label: `Fase ${p.toUpperCase()} (V)`,
+    data:  rows.map(r => r[`phase_${p}_voltage`] ?? null),
+    borderColor: pcols[p], backgroundColor: pcols[p]+'20',
+    borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false
+  }));
+
+  datasets.push(...buildAnomalyDatasets(rows, ph, p => `phase_${p}_voltage`, 'avg_v', s, 0.20));
+
+  chartV = new Chart(canvas.getContext('2d'), {
+    type: 'line', data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position:'top', labels:{ usePointStyle:true, font:{family:'Plus Jakarta Sans',size:12}, padding:12 } },
+        tooltip: { mode:'index', intersect:false }
+      },
+      scales: {
+        x: { ticks:{ maxTicksLimit:10, font:{family:'JetBrains Mono',size:10}, maxRotation:40 }, grid:{color:'#E4E7ED'} },
+        y: { ticks:{ font:{family:'JetBrains Mono',size:11} }, grid:{color:'#E4E7ED'}, title:{display:true,text:'Voltaje (V)',font:{size:11}} }
+      }
+    }
+  });
+
+  buildAnomalyNote('vAnomalyNote', rows, ph, p => `phase_${p}_voltage`, 'avg_v', s, 0.20, 'voltaje');
+}
+
+// ── Current chart ──
+function renderCurrentChart(history, ph) {
+  if (chartI) { chartI.destroy(); chartI = null; }
+  const canvas = document.getElementById('iChart');
+  const empty  = document.getElementById('iChartEmpty');
+  const anomEl = document.getElementById('iAnomalyNote');
+
+  if (!history || !history.length) {
+    canvas.style.display = 'none';
+    empty.style.display  = 'block';
+    anomEl.innerHTML = '';
+    return;
+  }
+  canvas.style.display = '';
+  empty.style.display  = 'none';
+
+  const rows = [...history].reverse();
+  const labels = rows.map(r => `${(r.date||'').split('T')[0]} ${String(r.hour??0).padStart(2,'0')}h`);
+  const s = apiData.summary30d;
+  const pcols = { a:'#00C48C', b:'#3B82F6', c:'#F59E0B' };
+
+  const datasets = ph.map(p => ({
+    label: `Fase ${p.toUpperCase()} (A)`,
+    data:  rows.map(r => r[`phase_${p}_current`] ?? null),
+    borderColor: pcols[p], backgroundColor: pcols[p]+'20',
+    borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false
+  }));
+
+  datasets.push(...buildAnomalyDatasets(rows, ph, p => `phase_${p}_current`, 'avg_i', s, 0.50));
+
+  chartI = new Chart(canvas.getContext('2d'), {
+    type: 'line', data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position:'top', labels:{ usePointStyle:true, font:{family:'Plus Jakarta Sans',size:12}, padding:12 } },
+        tooltip: { mode:'index', intersect:false }
+      },
+      scales: {
+        x: { ticks:{ maxTicksLimit:10, font:{family:'JetBrains Mono',size:10}, maxRotation:40 }, grid:{color:'#E4E7ED'} },
+        y: { ticks:{ font:{family:'JetBrains Mono',size:11} }, grid:{color:'#E4E7ED'}, title:{display:true,text:'Corriente (A)',font:{size:11}} }
+      }
+    }
+  });
+
+  buildAnomalyNote('iAnomalyNote', rows, ph, p => `phase_${p}_current`, 'avg_i', s, 0.50, 'corriente');
+}
+
+// ── FP indicator ──
+function renderFP() {
+  const fp  = currentVars.fp;
+  const avg = parseFloat(apiData.summary30d?.avg_fp) || 0;
+  const el  = document.getElementById('fpIndicator');
+  if (fp === undefined || isNaN(fp)) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--muted)">Factor de Potencia no ingresado.</p>';
+    return;
+  }
+  const abs = Math.abs(fp);
+  let col, lbl;
+  if      (abs >= 0.92) { col='var(--ok)';   lbl='Óptimo'; }
+  else if (abs >= 0.85) { col='var(--warn)';  lbl='Aceptable'; }
+  else                  { col='var(--crit)';  lbl='Bajo — riesgo de penalización CREG'; }
+  const pct = Math.min(100, abs * 100);
+  el.innerHTML = `
+    <div class="fp-header"><span class="fp-val" style="color:${col}">${fp}</span><span class="fp-hist-ref">Prom. 30d: ${avg||'—'}</span></div>
+    <div class="fp-label" style="color:${col}">${lbl}</div>
+    <div class="fp-track"><div class="fp-fill" style="width:${pct}%;background:${col}"></div></div>
+    <div class="fp-scale"><span>0.00</span><span>0.85</span><span>0.92</span><span>1.00</span></div>`;
+}
+
+// ── Cost banner ──
+function renderCost(r) {
+  const el = document.getElementById('costBannerEl');
+  if (![1,2,3].includes(r.sc)) { el.innerHTML = ''; return; }
+
+  if (r.sc === 1 || r.sc === 2) {
+    if (segment === 'A') {
+      el.innerHTML = `<div class="cost-banner cost-bia">
+        <div class="cbt">Segmento A — Diamante · Visita de inspección sin costo para el cliente</div>
+        Si se requiere visita técnica para verificar la acometida o la conexión con el OR, Bia asume el costo. Coordinar con Operaciones.</div>`;
+    } else {
+      const nm = segment === 'B' ? 'Gold' : 'Standard';
+      el.innerHTML = `<div class="cost-banner cost-cli">
+        <div class="cbt">Segmento ${segment} — ${nm} · La visita de inspección puede tener costo</div>
+        Si el problema está en la acometida o en la conexión del cliente al OR y se requiere visita técnica, esta puede tener costo. <strong>Informar al cliente y obtener aprobación antes de programar la visita.</strong></div>`;
+    }
+    return;
+  }
+
+  // sc === 3: after meter
+  if (segment === 'A') {
+    el.innerHTML = `<div class="cost-banner cost-bia">
+      <div class="cbt">Segmento A — Diamante · Bia asume el costo</div>
+      Coordinar visita técnica con Operaciones. No cobrar al cliente.</div>`;
+  } else {
+    const nm = segment === 'B' ? 'Gold' : 'Standard';
+    el.innerHTML = `<div class="cost-banner cost-cli">
+      <div class="cbt">Segmento ${segment} — ${nm} · Visita con costo para el cliente</div>
+      Informar el valor de la visita técnica al cliente y obtener aprobación ANTES de despachar el técnico.</div>`;
+  }
+}
+
+// ── Actions ──
+const ACTIONS = {
+  1: [
+    'Reportar inmediatamente al Operador de Red (OR). Si el local está dentro de un Centro Comercial (CC), contactar al personal de mantenimiento del CC en su lugar.',
+    'Consultar si hay trabajos activos, fallas reportadas o cortes programados en la zona.',
+    'NO restablecer energía remotamente hasta recibir confirmación del OR o mantenimiento del CC.',
+    'Abrir OT de emergencia con prioridad máxima. SLA ≤ 4h.',
+    'Informar al cliente que el problema está en la red eléctrica externa y que ya se gestionó la atención.'
+  ],
+  2: [
+    'Reportar al Operador de Red (OR) la anomalía de voltaje detectada. Si el local está en un CC, contactar al personal de mantenimiento del CC.',
+    'Documentar en el ticket el voltaje actual y el promedio histórico de los últimos 30 días.',
+    'Confirmar al cliente que el origen no es una falla interna de su instalación.',
+    'Abrir OT de seguimiento. SLA ≤ 24h.',
+    'Monitorear desde telemedida si el voltaje se estabiliza en las próximas horas.'
+  ],
+  3: [
+    'Pedir al cliente bajar el totalizador (breaker principal) COMPLETAMENTE.',
+    'Esperar 10 segundos y volver a subir el totalizador.',
+    'Si hay varios tableros, repetir el ciclo en cada uno.',
+    'Esperar 2 minutos y verificar con el cliente si volvió la energía.',
+    'Si se recuperó → cerrar el caso y documentar.',
+    'Si no se recuperó → escalar a visita técnica (ver aviso de costo arriba).'
+  ],
+  4: [
+    'Verificar con el cliente si incorporó nuevos equipos o cambió su operación recientemente.',
+    'Registrar en el ticket: "Frontera en riesgo de sobrecarga".',
+    'Coordinar con Operaciones una visita preventiva. SLA ≤ 15 días.',
+    'Informar al cliente sobre el riesgo de sobrecalentamiento del medidor y la importancia de revisar su carga instalada.'
+  ],
+  5: [
+    'Verificar con el cliente si ya recuperó la energía.',
+    'Si sigue sin energía → pedir al cliente revisar el tablero y los breakers internos.',
+    'Si persiste sin causa explicable → evaluar visita técnica (considerar costo por segmento).',
+    'Documentar el caso con los valores actuales reportados.'
+  ]
+};
+
+function renderActions(r) {
+  document.getElementById('actionsList').innerHTML =
+    ACTIONS[r.sc].map((a, i) => `<li><span class="anum">${i+1}</span><span>${a}</span></li>`).join('');
+}
+
+// ── Client copy ──
+const CLIENT_COPY = {
+  1: r => `Hola, muchas gracias por comunicarte con nosotros.
+
+Revisamos el estado de tu medidor en nuestro sistema y detectamos que una de las fases de energía (Fase ${r.phase}) no está llegando correctamente al local. Esto nos indica que el problema está en la red eléctrica externa —es decir, en la infraestructura del operador de red— y no en tu instalación interna.
+
+Ya estamos reportando la situación al operador responsable para que atienda la novedad a la brevedad. Te mantendremos informado del avance.
+
+Lamentamos los inconvenientes que esto pueda estar causando.`,
+
+  2: r => `Hola, muchas gracias por comunicarte con nosotros.
+
+Verificamos los datos de tu medidor y vemos que el voltaje en Fase ${r.phase} está más bajo de lo normal: en este momento hay ${r.vAct} V, cuando lo habitual es alrededor de ${r.hist} V. Esto suele ocurrir por un problema en la red eléctrica externa, como una falla en la línea del operador de red o en el transformador de la zona.
+
+El problema no está en tu instalación interna. Ya estamos reportando la situación para que sea atendida.
+
+Te avisaremos cuando tengamos novedades.`,
+
+  3: () => `Hola, muchas gracias por comunicarte con nosotros.
+
+Revisamos el sistema y confirmamos que la energía está llegando correctamente hasta tu medidor —eso es buena señal. El inconveniente parece estar en la instalación eléctrica interna del local, posiblemente en los breakers o el tablero eléctrico.
+
+Te pedimos que intentes lo siguiente:
+1. Baja completamente el breaker principal (o totalizador) de tu local.
+2. Espera 10 segundos.
+3. Vuélvelo a subir.
+4. Si tienes varios tableros, repite el mismo proceso en cada uno.
+5. Espera 2 minutos y verifica si volvió la energía.
+
+¿Pudiste intentarlo? Cuéntanos cómo te fue y seguimos gestionando desde acá.`,
+
+  4: r => `Hola, muchas gracias por comunicarte con nosotros.
+
+Estamos viendo en nuestro sistema que el consumo eléctrico del local está bastante por encima de lo habitual en este momento —la corriente en Fase ${r.phase} está en ${r.iAct} A, cuando normalmente el máximo registrado es de ${r.maxH} A.
+
+Esto puede ocurrir si recientemente se conectaron equipos nuevos o si hay algún aparato consumiendo más de lo esperado. Es importante revisarlo para evitar una falla o un sobrecalentamiento del medidor.
+
+¿Sabes si se incorporó algún equipo nuevo o si hay algo funcionando de manera diferente en este momento?`,
+
+  5: () => `Hola, muchas gracias por comunicarte con nosotros.
+
+Revisamos el estado del medidor en nuestro sistema y en este momento no detectamos ninguna anomalía eléctrica desde nuestra parte. Las variables del medidor están dentro de los rangos normales.
+
+Es posible que el problema haya sido puntual y ya se haya resuelto solo, o que esté relacionado con algo en la instalación interna del local (tablero, breakers o cableado).
+
+Te recomendamos revisar los interruptores del tablero eléctrico. Si el inconveniente persiste, con gusto te ayudamos a coordinar una revisión técnica.`
+};
+
+function renderClientCopy(r) {
+  const text = CLIENT_COPY[r.sc](r);
+  document.getElementById('clientCopyEl').innerHTML = `
+    <div class="client-copy-card">
+      <div class="client-copy-header">
+        <span class="client-copy-title">Mensaje para el cliente</span>
+        <button class="btn-copy" id="btnCopy" onclick="copyClientText()">
+          <span id="copyIcon">📋</span><span id="copyLabel">Copiar</span>
+        </button>
+      </div>
+      <div class="client-copy-text" id="clientCopyText">${text}</div>
+    </div>`;
+}
+
+async function copyClientText() {
+  const text = document.getElementById('clientCopyText').textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  }
+  const btn = document.getElementById('btnCopy');
+  document.getElementById('copyIcon').textContent  = '✓';
+  document.getElementById('copyLabel').textContent = 'Copiado';
+  btn.classList.add('copied');
+  setTimeout(() => {
+    document.getElementById('copyIcon').textContent  = '📋';
+    document.getElementById('copyLabel').textContent = 'Copiar';
+    btn.classList.remove('copied');
+  }, 2200);
+}
+
+// ── Download JPG ──
+function downloadCharts() {
+  const items = [
+    { canvas: chartV ? document.getElementById('vChart') : null, title: 'VOLTAJE · ÚLTIMAS 72h' },
+    { canvas: chartI ? document.getElementById('iChart') : null, title: 'CORRIENTE · ÚLTIMAS 72h' }
+  ].filter(c => c.canvas);
+
+  if (!items.length) { alert('No hay gráficas disponibles para descargar.'); return; }
+
+  const W = 740, CHART_H = 220, PAD = 20, HDR = 50, SEC = 28;
+  const totalH = HDR + items.length * (SEC + CHART_H + PAD) + PAD;
+
+  const out = document.createElement('canvas');
+  out.width = W; out.height = totalH;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, totalH);
+
+  const m = apiData.meter;
+  ctx.fillStyle = '#0F1623'; ctx.font = 'bold 14px sans-serif';
+  ctx.fillText('BIA ENERGY · Diagnóstico Emergencias', PAD, 22);
+  ctx.fillStyle = '#6B7280'; ctx.font = '11px monospace';
+  ctx.fillText(`${m.meter_name || 'Medidor '+m.meter_id}  ·  Contrato ${m.contract_id||'—'}  ·  ${new Date().toLocaleDateString('es-CO')}`, PAD, 40);
+
+  let y = HDR;
+  items.forEach(({ canvas, title }) => {
+    ctx.fillStyle = '#374151'; ctx.font = 'bold 11px sans-serif';
+    ctx.fillText(title, PAD, y + 16);
+    ctx.drawImage(canvas, 0, y + SEC, W, CHART_H);
+    y += SEC + CHART_H + PAD;
+  });
+
+  const link = document.createElement('a');
+  link.download = `bia-diagnostico-${m.contract_id||m.meter_id}-${new Date().toISOString().split('T')[0]}.jpg`;
+  link.href = out.toDataURL('image/jpeg', 0.92);
+  link.click();
+}
+
+// ── Helpers ──
+function setLoading(show, msg) {
+  document.getElementById('loader').classList.toggle('show', show);
+  document.getElementById('btnBuscar').disabled = show;
+  if (msg) document.getElementById('loaderTxt').textContent = msg;
+}
+function setErr(msg) {
+  document.getElementById('errMsg').textContent = msg;
+  document.getElementById('errBanner').classList.add('show');
+}
+function clearErr() { document.getElementById('errBanner').classList.remove('show'); }
+
+function resetAll() {
+  apiData = meterType = segment = null;
+  currentVars = {};
+  if (chartV) { chartV.destroy(); chartV = null; }
+  if (chartI) { chartI.destroy(); chartI = null; }
+  document.getElementById('contractInput').value = '';
+  clearErr();
+  goTo(1);
+}
+
+goTo(1);
+</script>
+</body>
+</html>
